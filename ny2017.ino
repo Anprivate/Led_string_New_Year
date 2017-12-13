@@ -1,29 +1,35 @@
-// Пин на который цепляются светодиоды
-#define LED_PIN 2
+// New Year string control
+// rainbow_beat adopted from https://github.com/atuline/FastLED-Demos
 
-// всего пикселей
+// PIN LED CONNECTED
+#define LED_PIN 2
+// What kind of strip are you using (APA102, WS2801 or WS2812B)?
+#define LED_TYPE WS2812
+// It's GRB for WS2812B and BGR for APA102
+#define COLOR_ORDER GRB
+
+// Total leds in string
 #define total_pixels 50
 
-// Длительность кадра
+// One frame time (in ms)
 #define frame_period 10
 
-// длительность одного эффекта
+// Time for one effect showing
 #define time_per_effect 10000
 
 #define total_cycles (time_per_effect / frame_period)
 
-#include "FastLED.h"                                          // FastLED library.
+// FastLED library
+#include "FastLED.h"
 
 #if FASTLED_VERSION < 3001000
 #error "Requires FastLED 3.1 or later; check github for latest code."
 #endif
 
-#define LED_TYPE WS2812                                       // What kind of strip are you using (APA102, WS2801 or WS2812B)?
-#define COLOR_ORDER GRB                                       // It's GRB for WS2812B and BGR for APA102
+// Initialize our LED array
+struct CRGB leds[total_pixels];
 
-struct CRGB leds[total_pixels];                                   // Initialize our LED array.
-
-// яркость
+// Current brightness
 uint8_t cur_br = 50;
 
 void setup() {
@@ -37,7 +43,7 @@ void loop() {
 
   uint8_t curr_mode;
   do {
-    curr_mode = random(3);
+    curr_mode = random(4);
   } while (curr_mode == prev_mode);
   prev_mode = curr_mode;
 
@@ -55,6 +61,11 @@ void loop() {
         Comet(true);
         break;
       }
+    case 3: {
+        rainbow_beat();
+        break;
+      }
+
   }
   delay(300);
 }
@@ -217,6 +228,32 @@ void Comet(boolean direction_is_up)
     if ((time_counter > total_cycles) && !was_indication) break;
   }
 }
+
+void rainbow_beat() {
+  uint16_t time_counter = 0;
+  while (true)
+  {
+    // fade in and out is 1000 msec
+    const uint16_t fade_cntr = 1000 / frame_period;
+    if (time_counter <= fade_cntr)
+      FastLED.setBrightness((uint16_t) cur_br * time_counter / fade_cntr);
+    else if ((total_cycles - time_counter) < fade_cntr)
+      FastLED.setBrightness((uint16_t) cur_br * (total_cycles - time_counter) / fade_cntr);
+    else
+      FastLED.setBrightness(cur_br);
+
+
+    uint8_t beatA = beatsin8(17, 0, 255);                        // Starting hue
+    uint8_t beatB = beatsin8(13, 0, 255);
+    fill_rainbow(leds, total_pixels, (beatA + beatB) / 2, 8);        // Use FastLED's fill_rainbow routine.
+    FastLED.show();
+    delay_sp(frame_period);
+
+    time_counter++;
+    if (time_counter > total_cycles) break;
+  }
+  FastLED.setBrightness(cur_br);
+} // rainbow_beat()
 
 // ================================================================
 // вспомогательные функции
