@@ -1,6 +1,3 @@
-
-#include <Adafruit_NeoPixel.h>
-
 // Пин на который цепляются светодиоды
 #define LED_PIN 2
 
@@ -15,14 +12,23 @@
 
 #define total_cycles (time_per_effect / frame_period)
 
-Adafruit_NeoPixel strip = Adafruit_NeoPixel(total_pixels, LED_PIN, NEO_GRB + NEO_KHZ800);
+#include "FastLED.h"                                          // FastLED library.
+
+#if FASTLED_VERSION < 3001000
+#error "Requires FastLED 3.1 or later; check github for latest code."
+#endif
+
+#define LED_TYPE WS2812                                       // What kind of strip are you using (APA102, WS2801 or WS2812B)?
+#define COLOR_ORDER GRB                                       // It's GRB for WS2812B and BGR for APA102
+
+struct CRGB leds[total_pixels];                                   // Initialize our LED array.
 
 // яркость
 uint8_t cur_br = 50;
 
 void setup() {
-  strip.begin();
-  strip.show();
+  LEDS.addLeds<LED_TYPE, LED_PIN, COLOR_ORDER>(leds, total_pixels);
+  set_max_power_in_volts_and_milliamps(5, 500);               // FastLED Power management set at 5V, 500mA
   SetBrightness();
 }
 
@@ -64,7 +70,7 @@ void StarSky(void) {
 #define speed_cntr (500 / frame_period)
 
   uint8_t predelay[star_number];
-  uint32_t color[star_number];
+  CRGB color[star_number];
   uint8_t pixel_num[star_number];
 
   for (uint8_t i = 0; i < star_number; i++) {
@@ -80,12 +86,12 @@ void StarSky(void) {
     clear_all();
 
     for (uint8_t curr_star = 0; curr_star < star_number; curr_star++) {
-      if (color[curr_star] == 0) { // predelay stage
+      if (int(color[curr_star]) == 0) { // predelay stage
         if (predelay[curr_star])
           predelay[curr_star]--;
         else
           // predelay закончился, задаём любой цвет
-          color[curr_star] = 1;
+          color[curr_star] = CRGB::Red;
       } else {
         if (predelay[curr_star] == 0) { // начальная фаза, генерим параметры пикселя
           // ищем свободный пиксель
@@ -107,18 +113,18 @@ void StarSky(void) {
         } else {
           // рабочая фаза, старший бит обозначает направление
           if (predelay[curr_star] & 0x80) { // fade down
-            strip.setPixelColor(pixel_num[curr_star], mult_div_color(color[curr_star], predelay[curr_star] & 0x7F, speed_cntr));
+            leds[pixel_num[curr_star]] = mult_div_color(color[curr_star], predelay[curr_star] & 0x7F, speed_cntr);
             predelay[curr_star]--;
             if ((predelay[curr_star] & 0x7F) == 0) predelay[curr_star] = 0;
           } else { // fade up
-            strip.setPixelColor(pixel_num[curr_star], mult_div_color(color[curr_star], predelay[curr_star], speed_cntr));
+            leds[pixel_num[curr_star]] = mult_div_color(color[curr_star], predelay[curr_star], speed_cntr);
             predelay[curr_star]++;
             if (predelay[curr_star] >= speed_cntr) predelay[curr_star] |= 0x80;
           }
         }
       }
     }
-    strip.show();
+    FastLED.show();
     delay_sp(frame_period);
   }
   // финал - плавненько гасим все пиксели
@@ -129,13 +135,13 @@ void StarSky(void) {
     some_action = 0;
     for (uint8_t curr_star = 0; curr_star < star_number; curr_star++) {
       predelay[curr_star] &= 0x7F;
-      strip.setPixelColor(pixel_num[curr_star], mult_div_color(color[curr_star], predelay[curr_star], speed_cntr));
+      leds[pixel_num[curr_star]] = mult_div_color(color[curr_star], predelay[curr_star], speed_cntr);
       if (predelay[curr_star]) {
         predelay[curr_star]--;
         some_action = 1;
       }
     }
-    strip.show();
+    FastLED.show();
     delay_sp(frame_period);
   } while (some_action);
 }
@@ -145,9 +151,9 @@ void Comet(boolean direction_is_up)
   // длина кометы
 #define comet_length  5
   // интервал кометы
-#define comet_interval  15
+#define comet_interval  12
   // oversample
-#define comet_oversample  5
+#define comet_oversample  10
 
 #define comet_qty (total_pixels / comet_interval + 1)
 
@@ -166,25 +172,26 @@ void Comet(boolean direction_is_up)
   {
     clear_all();
     boolean was_indication = false;
+    SetBrightness();
     for (uint8_t comet_num = 0; comet_num < comet_qty; comet_num++)
     {
       if (comet_start[comet_num] >= 0) {
         uint16_t pix_pos = comet_start[comet_num] / comet_oversample;
         uint16_t pix_sub = comet_start[comet_num] % comet_oversample;
-        uint32_t cur_color = mask_to_color(comet_mask[comet_num]);
+        CRGB cur_color = mask_to_color(comet_mask[comet_num]);
         if (pixel_num_is_valid(pix_pos))
           if (direction_is_up)
-            strip.setPixelColor(pix_pos, mult_div_color(cur_color, pix_sub, comet_oversample));
+            leds[pix_pos] = mult_div_color(cur_color, pix_sub, comet_oversample);
           else
-            strip.setPixelColor(total_pixels - 1 - pix_pos, mult_div_color(cur_color, pix_sub, comet_oversample));
+            leds[total_pixels - 1 - pix_pos] = mult_div_color(cur_color, pix_sub, comet_oversample);
         for (uint8_t i = 0; i < comet_length; i++)
         {
           pix_pos--;
           if (!pixel_num_is_valid(pix_pos)) break;
           if (direction_is_up)
-            strip.setPixelColor(pix_pos, mult_div_color(cur_color, (comet_length - i) * comet_oversample - pix_sub, comet_length * comet_oversample));
+            leds[pix_pos] = mult_div_color(cur_color, (comet_length - i) * comet_oversample - pix_sub, comet_length * comet_oversample);
           else
-            strip.setPixelColor(total_pixels - 1 - pix_pos, mult_div_color(cur_color, (comet_length - i) * comet_oversample - pix_sub, comet_length * comet_oversample));
+            leds[total_pixels - 1 - pix_pos] = mult_div_color(cur_color, (comet_length - i) * comet_oversample - pix_sub, comet_length * comet_oversample);
           was_indication = true;
         }
       }
@@ -203,7 +210,7 @@ void Comet(boolean direction_is_up)
       }
     }
 
-    strip.show();
+    FastLED.show();
     delay_sp(frame_period);
 
     time_counter++;
@@ -227,35 +234,32 @@ void delay_sp(uint16_t value) {
 
 // очистка всего
 void clear_all(void) {
-  for (uint16_t i = 0; i < total_pixels; i++) {
-    strip.setPixelColor(i, 0x00000000);
-  }
+  for (uint16_t i = 0; i < total_pixels; i++)
+    leds[i] = CRGB::Black;
 }
 
 // маска цветов в цвет
-uint32_t mask_to_color(uint8_t mask) {
-  uint32_t tmp_color = 0;
-  uint32_t maskbit = 0x000000FF;
-  if (mask & 0x01) tmp_color += maskbit;
-  maskbit <<= 8;
-  if (mask & 0x02) tmp_color += maskbit;
-  (maskbit <<= 8);
-  if (mask & 0x04) tmp_color += maskbit;
+CRGB mask_to_color(uint8_t mask) {
+  CRGB tmp_color = CRGB::Black;
+  if (mask & 0x01) tmp_color.r = 255;
+  if (mask & 0x02) tmp_color.g = 255;
+  if (mask & 0x04) tmp_color.b = 255;
   return tmp_color;
 }
 
 // берём RGB цвета, умножаем на mult и делим на divider
-uint32_t mult_div_color(uint32_t in_color, uint16_t mult, uint16_t divider) {
-  uint32_t rn = ((in_color >> 16) & 0xFF) * mult / divider;
-  uint32_t gn = ((in_color >> 8) & 0xFF) * mult / divider;
-  uint32_t bn = (in_color & 0xFF) * mult / divider;
-  return (rn << 16) | (gn << 8) | bn;
+CRGB mult_div_color(CRGB in_color, uint16_t mult, uint16_t divider) {
+  CRGB tmp_color;
+  tmp_color.r = (uint16_t) in_color.r * mult / divider;
+  tmp_color.g = (uint16_t) in_color.g * mult / divider;
+  tmp_color.b = (uint16_t) in_color.b * mult / divider;
+  return tmp_color;
 }
 
 // задать яркость
 // сюда можно запихнуть чтение значения яркости от потенциометра по любому аналоговому входу
 void SetBrightness(void) {
-  strip.setBrightness(cur_br);
+  FastLED.setBrightness(cur_br);
 }
 
 // номер пикселя допустим?
