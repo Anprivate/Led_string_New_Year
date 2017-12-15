@@ -34,7 +34,8 @@ uint8_t cur_br = 50;
 
 void setup() {
   LEDS.addLeds<LED_TYPE, LED_PIN, COLOR_ORDER>(leds, total_pixels);
-  set_max_power_in_volts_and_milliamps(5, 500);               // FastLED Power management set at 5V, 500mA
+  // FastLED Power management set at 5V, 500mA
+  set_max_power_in_volts_and_milliamps(5, 500);
   SetBrightness();
 }
 
@@ -198,12 +199,14 @@ void Comet(boolean direction_is_up)
         for (uint8_t i = 0; i < comet_length; i++)
         {
           pix_pos--;
-          if (!pixel_num_is_valid(pix_pos)) break;
-          if (direction_is_up)
-            leds[pix_pos] = mult_div_color(cur_color, (comet_length - i) * comet_oversample - pix_sub, comet_length * comet_oversample);
-          else
-            leds[total_pixels - 1 - pix_pos] = mult_div_color(cur_color, (comet_length - i) * comet_oversample - pix_sub, comet_length * comet_oversample);
-          was_indication = true;
+          if (pixel_num_is_valid(pix_pos))
+          {
+            if (direction_is_up)
+              leds[pix_pos] = mult_div_color(cur_color, (comet_length - i) * comet_oversample - pix_sub, comet_length * comet_oversample);
+            else
+              leds[total_pixels - 1 - pix_pos] = mult_div_color(cur_color, (comet_length - i) * comet_oversample - pix_sub, comet_length * comet_oversample);
+            was_indication = true;
+          }
         }
       }
       comet_start[comet_num]++;
